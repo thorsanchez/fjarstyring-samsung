@@ -1,11 +1,11 @@
 {
   "name": "fjarstyringsamsung",
   "version": "1.0.0",
-  "type": "module",
+  "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "start": "node --loader ts-node/esm index.ts",
-    "dev": "node --loader ts-node/esm --watch index.ts",
+    "start": "ts-node index.ts",
+    "dev": "ts-node-dev --respawn index.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

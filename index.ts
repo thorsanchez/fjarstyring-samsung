@@ -1,5 +1,5 @@
-import WebSocket from 'ws';
-import express from 'express';
+import WebSocket, { RawData } from 'ws';
+import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import 'dotenv/config';
 
@@ -86,30 +86,6 @@ function connectToTV() {
 // kalla á function til að tengjast
 connectToTV();
 
-// senda skipun
-function sendKey(key: string) {
-    //erum við tengd with samsung?
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    const state = ws ? ws.readyState : 'null';
-    console.error('WebSocket ekki tengdur.state:', state);
-    throw new Error('samsung tv ekki tengt.');
-  }
-
-  //json sem samsungtv vill
-  const message = {
-    method: "ms.remote.control",
-    params: {
-      Cmd: "Click",
-      DataOfCmd: key,
-      Option: "false",
-      TypeOfRemote: "SendRemoteKey"
-    }
-  };
-  //senda og logga skipun
-  ws.send(JSON.stringify(message));
-  console.log(`Sent command: ${key}`);
-}
-
 // ræsa server og json reading
 const app = express();
 app.use(bodyParser.json());
@@ -125,6 +101,31 @@ app.get('/status', (_req, res) => {
     });
 });
 
+// fyrir key skipanir
+function sendKey(key: string) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('TV not connected');
+  const message = {
+    method: "ms.remote.control",
+    params: { Cmd: "Click", DataOfCmd: key, Option: "false", TypeOfRemote: "SendRemoteKey" }
+  };
+  ws.send(JSON.stringify(message));
+  console.log(`KEY sent: ${key}`);
+}
+
+//opna app
+function launchApp(appId: string) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('TV not connected');
+  const message = {
+    method: "ms.channel.emit",
+    params: {
+      channel: "webappmanager",
+      payload: { operation: "execute", id: appId }
+    }
+  };
+  ws.send(JSON.stringify(message));
+  console.log(`App launched: ${appId}`);
+}
+
 // endpoints
 app.post('/tv', (req, res) => {
   try {
@@ -134,37 +135,39 @@ app.post('/tv', (req, res) => {
     }
 
     // samsung key skipanir
-    const commands: Record<string, string> = {
+    const keyCommands: Record<string, string> = {
       volup: 'KEY_VOLUP',
       voldown: 'KEY_VOLDOWN',
       home: 'KEY_HOME',
-      netflix: 'KEY_NETFLIX', //virkar ekki atm
       channelup: 'KEY_CHUP',
       channeldown: 'KEY_CHDOWN',
-      power: 'KEY_POWER',   
-      poweroff: 'KEY_POWEROFF', //þetta virkar ekki?
-      poweron: 'KEY_POWERON'  //þetta virkar heldur ekki
+      power: 'KEY_POWER',
     };
 
-    const key = commands[action];
-    if (!key) {
+    // App id
+    const appCommands: Record<string, string> = {
+      netflix: 'org.tizen.netflix-1.0',
+      disney: 'org.tizen.disneyplus'
+    };
+
+    if (keyCommands[action]) {
+      sendKey(keyCommands[action]);
+    } else if (appCommands[action]) {
+      launchApp(appCommands[action]);
+    } else {
       return res.status(400).json({
         error: 'Unknown action',
-        validActions: Object.keys(commands)
+        validActions: [...Object.keys(keyCommands), ...Object.keys(appCommands)]
       });
     }
 
-    sendKey(key);
-    res.json({ success: true, message: 'command sent', action, key });
-
+    res.json({ success: true, message: 'Command sent', action });
   } catch (error) {
-    console.error('Error sending command:', error);
-    res.status(503).json({
-      error: error instanceof Error ? error.message : 'Failed to send command',
-      hint: 'Check TV is connected and authorized'
-    });
+    console.error('Error:', error);
+    res.status(503).json({ error: error instanceof Error ? error.message : 'Failed' });
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
