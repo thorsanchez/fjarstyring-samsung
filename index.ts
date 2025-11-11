@@ -127,32 +127,43 @@ app.get('/status', (_req, res) => {
 
 // endpoints
 app.post('/tv', (req, res) => {
-    try {
-        const { action } = req.body;
-        if (!action) {
-            res.status(400).json({ error: 'Action is required' });
-            return;
-        }
-
-        if (action === 'volup') sendKey('KEY_VOLUP');
-        else if (action === 'voldown') sendKey('KEY_VOLDOWN');
-        else if (action === 'home') sendKey('KEY_HOME');
-        else {
-            res.status(400).json({
-                error: 'Unknown action',
-                validActions: ['volup', 'voldown', 'home']
-            });
-            return;
-        }
-
-        res.json({ success: true, message: 'command sent', action });
-    } catch (error) {
-        console.error('Error sending command:', error);
-        res.status(503).json({
-            error: error instanceof Error ? error.message : 'Failed to send command',
-            hint: 'Check tv is connected and authorized'
-        });
+  try {
+    const { action } = req.body;
+    if (!action) {
+      return res.status(400).json({ error: 'Action is required' });
     }
+
+    // samsung key skipanir
+    const commands: Record<string, string> = {
+      volup: 'KEY_VOLUP',
+      voldown: 'KEY_VOLDOWN',
+      home: 'KEY_HOME',
+      netflix: 'KEY_NETFLIX', //virkar ekki atm
+      channelup: 'KEY_CHUP',
+      channeldown: 'KEY_CHDOWN',
+      power: 'KEY_POWER',   
+      poweroff: 'KEY_POWEROFF', //þetta virkar ekki?
+      poweron: 'KEY_POWERON'  //þetta virkar heldur ekki
+    };
+
+    const key = commands[action];
+    if (!key) {
+      return res.status(400).json({
+        error: 'Unknown action',
+        validActions: Object.keys(commands)
+      });
+    }
+
+    sendKey(key);
+    res.json({ success: true, message: 'command sent', action, key });
+
+  } catch (error) {
+    console.error('Error sending command:', error);
+    res.status(503).json({
+      error: error instanceof Error ? error.message : 'Failed to send command',
+      hint: 'Check TV is connected and authorized'
+    });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
